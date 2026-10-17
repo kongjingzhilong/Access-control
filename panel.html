@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>链盾 ChainShield 控制台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e0e0e0}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+h1{text-align:center;color:#58a6ff;margin-bottom:5px}
+.subtitle{text-align:center;color:#8b949e;font-size:13px;margin-bottom:25px}
+.row{display:flex;gap:15px;margin-bottom:25px;flex-wrap:wrap}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;flex:1;min-width:200px}
+.card h3{font-size:13px;color:#8b949e;margin-bottom:8px}
+.card .val{font-size:22px;font-weight:bold}
+.green{color:#3fb950}.red{color:#f85149}.yellow{color:#d29922}
+.section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px}
+.section h2{font-size:16px;color:#58a6ff;margin-bottom:15px;border-bottom:1px solid #30363d;padding-bottom:10px}
+.form-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.form-row label{width:110px;font-size:13px;color:#8b949e}
+.form-row select,.form-row input{background:#0d1117;border:1px solid #30363d;color:#e0e0e0;padding:6px 10px;border-radius:4px;font-size:13px;flex:1;min-width:120px}
+.btn{background:#1f6feb;color:#fff;border:none;padding:7px 16px;border-radius:4px;cursor:pointer;font-size:13px}
+.btn:hover{background:#388bfd}
+.btn-green{background:#238636}.btn-green:hover{background:#2ea043}
+.btn-red{background:#da3633}.btn-red:hover{background:#f85149}
+.btn-mini{padding:3px 10px;font-size:12px;margin-right:4px}
+#result{margin-top:15px;padding:12px;background:#0d1117;border-radius:4px;font-family:monospace;font-size:12px;display:none;white-space:pre-wrap;word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px;color:#8b949e;border-bottom:1px solid #30363d}
+td{padding:8px;border-bottom:1px solid #21262d}
+.badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;display:inline-block}
+.badge-allow{background:#1a4731;color:#3fb950}
+.badge-approval{background:#3d2e00;color:#d29922}
+.badge-deny{background:#47121a;color:#f85149}
+.empty{color:#484f58;text-align:center;padding:20px;font-style:italic}
+.tag{background:#21262d;padding:1px 6px;border-radius:3px;font-size:11px;color:#8b949e;margin-right:3px}
+.role-bar{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 15px;margin-bottom:20px;display:flex;gap:20px;align-items:center;flex-wrap:wrap;font-size:13px}
+.role-bar select{background:#161b22;border:1px solid #30363d;color:#e0e0e0;padding:4px 8px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>链盾 ChainShield</h1>
+<div class="subtitle">K8s Agent 操作安全网关 · PDP 策略决策点</div>
+<div class="row">
+<div class="card"><h3>网关</h3><div class="val green" id="st-gw">—</div></div>
+<div class="card"><h3>OPA 策略引擎</h3><div class="val" id="st-opa">—</div></div>
+<div class="card"><h3>Ollama 大模型</h3><div class="val" id="st-ollama">—</div></div>
+<div class="card"><h3>默认角色</h3><div class="val" id="st-roles" style="font-size:16px">—</div></div>
+</div>
+<div class="role-bar">
+<span>Agent 用户角色(X-User-Roles):</span>
+<select id="user-roles">
+<option value="operator">operator</option>
+<option value="viewer">viewer</option>
+<option value="admin">admin</option>
+<option value="cluster-admin">cluster-admin</option>
+</select>
+<span style="margin-left:20px">审批人角色(X-Approver-Roles):</span>
+<select id="approver-roles">
+<option value="operator">operator</option>
+<option value="cluster-admin" selected>cluster-admin</option>
+</select>
+</div>
+<div class="section">
+<h2>工具调用判定 (POST /api/v1/evaluate)</h2>
+<div class="form-row"><label>Action</label>
+<select id="m-action">
+<option value="get">get (只读)</option>
+<option value="list">list (只读)</option>
+<option value="describe">describe (只读)</option>
+<option value="create">create (写)</option>
+<option value="patch" selected>patch (写)</option>
+<option value="delete">delete (删)</option>
+<option value="scale">scale (管理)</option>
+<option value="rollout-restart">rollout-restart (管理)</option>
+</select></div>
+<div class="form-row"><label>Resource</label>
+<select id="m-res">
+<option value="pod">pod</option>
+<option value="deployment">deployment</option>
+<option value="configmap">configmap</option>
+</select></div>
+<div class="form-row"><label>Name</label><input id="m-name" value="redis-master-0"></div>
+<div class="form-row"><label>Namespace</label><input id="m-ns" value="default"></div>
+<div class="form-row" style="justify-content:flex-end">
+<button class="btn" onclick="simulate(false)">发送判定请求</button>
+<button class="btn btn-green" id="retry-btn" onclick="simulate(true)" style="display:none">携带审批令牌重试</button>
+</div>
+<div id="result"></div>
+</div>
+<div class="section">
+<h2>待审批操作 <span class="tag" id="ap-count"></span></h2>
+<table id="ap-table"><thead><tr><th>ID</th><th>Action</th><th>Resource</th><th>Name</th><th>NS</th><th>风险</th><th>需要角色</th><th>原因</th><th>操作</th></tr></thead><tbody id="ap-body"></tbody></table>
+</div>
+<div class="section">
+<h2>审计日志 (最近20条)</h2>
+<table id="au-table"><thead><tr><th>时间</th><th>Action</th><th>Resource</th><th>判定</th><th>风险</th><th>原因</th><th>审批ID</th></tr></thead><tbody id="au-body"></tbody></table>
+</div>
+</div>
+<script>
+let lastApprovalId=null
+function fmt(ts){if(!ts)return"—";return new Date(ts*1000).toLocaleTimeString("zh-CN")}
+function loadStatus(){
+fetch("/api/status").then(r=>r.json()).then(d=>{
+document.getElementById("st-gw").textContent="运行中";document.getElementById("st-gw").className="val green"
+const oa=document.getElementById("st-opa");oa.textContent=d.opa?"运行中":"未连接";oa.className="val "+(d.opa?"green":"red")
+const ol=document.getElementById("st-ollama");ol.textContent=d.ollama?"运行中":"未连接";ol.className="val "+(d.ollama?"green":"red")
+document.getElementById("st-roles").textContent=d.user_roles.join(", ")
+}).catch(()=>{document.getElementById("st-gw").textContent="连接失败";document.getElementById("st-gw").className="val red"})
+}
+function badgeFor(action){const m={allow:["badge-allow","放行"],allow_after_approval:["badge-allow","审批放行"],requires_approval:["badge-approval","待审批"],deny:["badge-deny","拦截"]};const v=m[action]||["badge-deny",action||"拦截"];return`<span class="badge ${v[0]}">${v[1]}</span>`}
+function riskBadge(level){const c=level==="low"?"allow":level==="medium"?"approval":"deny";return`<span class="badge badge-${c}">${level||"—"}</span>`}
+function loadApprovals(){
+fetch("/approvals").then(r=>r.json()).then(d=>{
+document.getElementById("ap-count").textContent=d.count+"项"
+const tb=document.getElementById("ap-body");tb.innerHTML=""
+if(d.count===0){tb.innerHTML='<tr><td colspan="9" class="empty">无待审批项</td></tr>';return}
+d.approvals.forEach(a=>{
+tb.innerHTML+=`<tr><td>${a.id}</td><td>${a.action}</td><td>${a.resource}</td><td>${a.name||"—"}</td><td>${a.namespace||"—"}</td><td>${riskBadge(a.risk_level)}</td><td>${(a.required_roles||[]).join(",")||"—"}</td><td style="font-size:12px">${a.reason||"—"}</td><td><button class="btn btn-green btn-mini" onclick="approve('${a.id}')">批准</button><button class="btn btn-red btn-mini" onclick="reject('${a.id}')">拒绝</button></td></tr>`
+})
+})}
+function approve(id){
+fetch(`/approve/${id}`,{method:"POST",headers:{"Content-Type":"application/json","X-Approver-Roles":document.getElementById("approver-roles").value},body:JSON.stringify({approver:"web-console"})})
+.then(async r=>({s:r.status,d:await r.json()})).then(({s,d})=>{
+if(s!==200){alert("批准失败:"+JSON.stringify(d));return}
+lastApprovalId=id
+document.getElementById("retry-btn").style.display="inline-block"
+document.getElementById("retry-btn").textContent=`携带审批令牌 ${id} 重试`
+loadApprovals();loadAudit()
+})}
+function reject(id){
+fetch(`/reject/${id}`,{method:"POST",headers:{"Content-Type":"application/json","X-Approver-Roles":document.getElementById("approver-roles").value},body:JSON.stringify({approver:"web-console"})})
+.then(r=>r.json()).then(()=>{loadApprovals();loadAudit()})}
+function loadAudit(){
+fetch("/api/audit/recent?n=20").then(r=>r.json()).then(d=>{
+const tb=document.getElementById("au-body");tb.innerHTML=""
+if(!d||d.length===0){tb.innerHTML='<tr><td colspan="7" class="empty">无记录</td></tr>';return}
+d.forEach(e=>{
+if(e.type==="approval"){tb.innerHTML+=`<tr><td>${fmt(e.timestamp)}</td><td colspan="2">审批:${e.action}</td><td colspan="2">approver:${e.approver}</td><td colspan="2">${e.approval_id}</td></tr>`;return}
+const ai=e.agent_input||{};const op=e.opa_result||{};const fa=e.final_action||"—"
+tb.innerHTML+=`<tr><td>${fmt(e.timestamp)}</td><td>${ai.action||"—"}</td><td>${ai.resource||"—"}</td><td>${badgeFor(fa)}</td><td>${riskBadge(op.risk_level)}</td><td style="font-size:12px">${op.reason||"—"}</td><td>${e.approval_id||"—"}</td></tr>`
+})
+})}
+function simulate(withToken){
+const body={action:document.getElementById("m-action").value,resource:document.getElementById("m-res").value,name:document.getElementById("m-name").value,namespace:document.getElementById("m-ns").value}
+if(withToken&&lastApprovalId)body.approved_id=lastApprovalId
+const headers={"Content-Type":"application/json","X-User-Roles":document.getElementById("user-roles").value}
+const el=document.getElementById("result");el.style.display="block";el.textContent="发送中..."
+fetch("/api/v1/evaluate",{method:"POST",headers:headers,body:JSON.stringify(body)})
+.then(async r=>({s:r.status,d:await r.json()})).then(({s,d})=>{
+el.textContent=`HTTP ${s}\n${JSON.stringify(d,null,2)}`
+if(d.decision==="requires_approval"&&d.approval_id){
+lastApprovalId=d.approval_id
+document.getElementById("retry-btn").style.display="none"
+}
+if(d.decision==="allow"){document.getElementById("retry-btn").style.display="none"}
+loadApprovals();loadAudit()
+}).catch(e=>{el.textContent="请求失败:"+e})
+}
+loadStatus();loadApprovals();loadAudit()
+setInterval(()=>{loadStatus();loadApprovals();loadAudit()},10000)
+</script>
+</body>
+</html>

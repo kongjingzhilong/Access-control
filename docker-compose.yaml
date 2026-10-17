@@ -1,0 +1,21 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "12001:12001"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:12000
+      - OPA_URL=http://opa:8181
+      - USER_ROLES=operator
+    depends_on:
+      - opa
+  opa:
+    image: openpolicyagent/opa:latest
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./policy:/policies:ro
+    command:
+      - run
+      - --server
+      - /policies

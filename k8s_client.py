@@ -1,0 +1,59 @@
+SYSTEM_NAMESPACES={"kube-system","kube-public","kube-node-lease"}
+MOCK_RESOURCES={
+    "pod":{
+        "nginx-7c8f9-abc":{
+            "namespace":"default",
+            "labels":{"app":"nginx","env":"prod","tier":"frontend"},
+            "annotations":{"chainshield.io/protected":"true"},
+            "owner":"team-web"
+        },
+        "redis-master-0":{
+            "namespace":"default",
+            "labels":{"app":"redis","env":"prod","tier":"cache"},
+            "annotations":{},
+            "owner":"team-data"
+        }
+    },
+    "deployment":{
+        "nginx":{
+            "namespace":"default",
+            "labels":{"app":"nginx","env":"prod"},
+            "annotations":{"chainshield.io/protected":"true"},
+            "owner":"team-web"
+        }
+    },
+    "configmap":{
+        "app-config":{
+            "namespace":"default",
+            "labels":{"env":"prod"},
+            "annotations":{},
+            "owner":"team-web"
+        }
+    }
+}
+def is_system_namespace(ns:str)->bool:
+    return ns in SYSTEM_NAMESPACES
+def get_resource_info(resource_type:str,name:str,namespace:str)->dict:
+    type_map=MOCK_RESOURCES.get(resource_type.lower(),{})
+    info=type_map.get(name)
+    if info:
+        return{
+            "found":True,
+            "namespace":info["namespace"],
+            "labels":info["labels"],
+            "annotations":info["annotations"],
+            "owner":info["owner"],
+            "is_system_namespace":is_system_namespace(info["namespace"]),
+            "has_protection_label":info["annotations"].get("chainshield.io/protected")=="true",
+            "is_prod":"prod" in info["labels"].get("env","")
+        }
+    return{
+        "found":False,
+        "namespace":namespace,
+        "labels":{},
+        "annotations":{},
+        "owner":"unknown",
+        "is_system_namespace":is_system_namespace(namespace),
+        "has_protection_label":False,
+        "is_prod":False
+    }
